@@ -74,7 +74,7 @@
     position: relative;
     overflow: hidden;
     cursor: pointer;
-    transition: border-color 0.2s, background 0.2s;
+    /* No transition on background/border — green must flash instantly for accurate timing */
   }
 
   #arena.waiting { background: #1a1a24; border-color: #3b82f6; }
@@ -681,28 +681,34 @@ function startCountdown() {
 
 function goGreen() {
   S.phase = 'go';
-  S.startTime = performance.now();
   setArena('go', pick(GO_MESSAGES), 'CLICK NOW!');
 
-  // Auto-fail if too slow
-  const timeout = rand(1800, 3000);
-  S.goTimer = setTimeout(() => {
-    if (S.phase !== 'go') return;
-    S.phase = 'idle';
-    S.tries++;
-    S.trolled++;
-    S.trollPhase++;
-    S.consecutiveGood = 0;
-    S.consecutiveTroll++;
-    addHistChip(null, 'bad');
-    setArena('fail', 'TOO SLOW! 💤', 'You took forever...');
-    shakeArena();
-    updateStats();
-    setTimeout(() => {
+  // Wait for the browser to actually paint the green screen before starting the timer.
+  // Double rAF ensures we record startTime after the frame is rendered and visible.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (S.phase !== 'go') return; // aborted before paint
+    S.startTime = performance.now();
+
+    // Auto-fail if too slow
+    const timeout = rand(1800, 3000);
+    S.goTimer = setTimeout(() => {
+      if (S.phase !== 'go') return;
       S.phase = 'idle';
-      setArena('', 'Click to Try Again', '');
-    }, 2000);
-  }, timeout);
+      S.tries++;
+      S.trolled++;
+      S.trollPhase++;
+      S.consecutiveGood = 0;
+      S.consecutiveTroll++;
+      addHistChip(null, 'bad');
+      setArena('fail', 'TOO SLOW! 💤', 'You took forever...');
+      shakeArena();
+      updateStats();
+      setTimeout(() => {
+        S.phase = 'idle';
+        setArena('', 'Click to Try Again', '');
+      }, 2000);
+    }, timeout);
+  }));
 }
 
 function showFakeSuccess() {
@@ -746,11 +752,17 @@ function handleArenaClick(e) {
   if (S.phase === 'idle') {
     // Sometimes show a loading fake before actually starting
     if (Math.random() < 0.25 && S.tries > 0) {
+      S.phase = 'loading'; // block re-entry during fake progress
       setArena('waiting', 'Initializing sensors...', '');
       startFakeProgress(rand(600, 1400), () => startCountdown());
     } else {
       startCountdown();
     }
+    return;
+  }
+
+  if (S.phase === 'loading') {
+    // Ignore clicks while fake-loading
     return;
   }
 
