@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reaction Speed Test</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --surface2: #24243a;
+    --accent: #7c3aed;
+    --accent2: #a855f7;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #eab308;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --radius: 16px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #app {
+    width: 100%;
+    max-width: 520px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent2), #38bdf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-top: -12px;
+  }
+
+  /* --- ARENA --- */
+  #arena {
+    width: 100%;
+    aspect-ratio: 1 / 0.65;
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 2px solid var(--surface2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  #arena.waiting { background: #1a1a24; border-color: #3b82f6; }
+  #arena.go      { background: #14290e; border-color: var(--green); cursor: crosshair; }
+  #arena.fail    { background: #2a0e0e; border-color: var(--red); }
+  #arena.fake-success { background: #132a13; border-color: var(--green); }
+  #arena.troll   { background: #1a1505; border-color: var(--yellow); }
+
+  #arena-msg {
+    font-size: 2.2rem;
+    font-weight: 800;
+    text-align: center;
+    pointer-events: none;
+    transition: color 0.15s;
+    line-height: 1.2;
+    padding: 0 16px;
+  }
+
+  #arena-sub {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    color: var(--muted);
+    text-align: center;
+    pointer-events: none;
+    min-height: 22px;
+  }
+
+  #countdown-ring {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    pointer-events: none;
+  }
+  #countdown-ring circle {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 3;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+    transform-origin: center;
+    transform: rotate(-90deg);
+    transition: stroke-dashoffset 0.1s linear;
+  }
+
+  /* --- FLOATING TROLL BTN --- */
+  #troll-btn {
+    position: fixed;
+    padding: 14px 28px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 50px;
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: none;
+    box-shadow: 0 4px 30px rgba(124,58,237,0.5);
+    transition: transform 0.1s;
+    z-index: 100;
+    white-space: nowrap;
+  }
+  #troll-btn:hover { transform: scale(1.05); }
+  #troll-btn:active { transform: scale(0.97); }
+
+  /* --- STATS BAR --- */
+  #stats {
+    width: 100%;
+    display: flex;
+    gap: 10px;
+  }
+  .stat-box {
+    flex: 1;
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 14px 10px;
+    text-align: center;
+    border: 1px solid var(--surface2);
+  }
+  .stat-val {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--accent2);
+  }
+  .stat-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* --- HISTORY --- */
+  #history {
+    width: 100%;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    min-height: 28px;
+  }
+  .hist-chip {
+    padding: 4px 10px;
+    border-radius: 50px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .hist-chip.good  { background: #14290e; color: var(--green); border: 1px solid #22c55e55; }
+  .hist-chip.bad   { background: #2a0e0e; color: var(--red);   border: 1px solid #ef444455; }
+  .hist-chip.troll { background: #1a1505; color: var(--yellow); border: 1px solid #eab30855; }
+
+  /* --- SHARE PANEL --- */
+  #share-panel {
+    width: 100%;
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    border: 1px solid var(--surface2);
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+  #share-panel.visible { display: flex; }
+  #share-panel h3 { font-size: 1rem; color: var(--muted); }
+  #score-display {
+    font-size: 3rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--green), #38bdf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+  }
+  #share-text {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    background: var(--surface2);
+    padding: 10px 14px;
+    border-radius: 8px;
+    width: 100%;
+    word-break: break-all;
+    cursor: text;
+  }
+  .share-btn-row { display: flex; gap: 10px; width: 100%; }
+  .btn-small {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.1s;
+  }
+  .btn-small:active { transform: scale(0.96); opacity: 0.85; }
+  .btn-copy   { background: var(--accent); color: #fff; }
+  .btn-tweet  { background: #1d9bf0; color: #fff; }
+  .btn-replay { background: var(--surface2); color: var(--text); }
+
+  /* --- TOAST --- */
+  #toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface2);
+    color: var(--text);
+    padding: 12px 22px;
+    border-radius: 50px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    pointer-events: none;
+    transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.35s;
+    opacity: 0;
+    z-index: 200;
+    white-space: nowrap;
+  }
+  #toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+
+  /* --- RIPPLE --- */
+  .ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    transform: scale(0);
+    animation: rippleAnim 0.6s linear;
+    pointer-events: none;
+  }
+  @keyframes rippleAnim {
+    to { transform: scale(4); opacity: 0; }
+  }
+
+  /* --- SHAKE --- */
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20%      { transform: translateX(-10px); }
+    40%      { transform: translateX(10px); }
+    60%      { transform: translateX(-8px); }
+    80%      { transform: translateX(8px); }
+  }
+  .shake { animation: shake 0.4s ease; }
+
+  /* --- PULSE GREEN --- */
+  @keyframes pulseGreen {
+    0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
+    50%     { box-shadow: 0 0 0 18px rgba(34,197,94,0); }
+  }
+  #arena.go { animation: pulseGreen 1s infinite; }
+
+  /* --- STAR PARTICLES --- */
+  .particle {
+    position: fixed;
+    pointer-events: none;
+    font-size: 1.2rem;
+    animation: floatUp 1.2s ease-out forwards;
+    z-index: 300;
+  }
+  @keyframes floatUp {
+    0%   { transform: translateY(0) scale(1); opacity: 1; }
+    100% { transform: translateY(-120px) scale(0.3); opacity: 0; }
+  }
+
+  /* --- PROGRESS BAR (fake) --- */
+  #fake-progress {
+    width: 100%;
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+    display: none;
+  }
+  #fake-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    width: 0%;
+    transition: width 0.1s linear;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>Reaction Speed Test</h1>
+  <p class="subtitle">How fast are you? (Spoiler: not fast enough)</p>
+
+  <div id="fake-progress"><div id="fake-progress-bar"></div></div>
+
+  <div id="arena" onclick="handleArenaClick(event)">
+    <div id="arena-msg">Click to Start</div>
+    <div id="arena-sub">Test your human reflexes</div>
+    <svg id="countdown-ring" viewBox="0 0 40 40">
+      <circle cx="20" cy="20" r="16" id="ring-circle"/>
+    </svg>
+  </div>
+
+  <div id="stats">
+    <div class="stat-box">
+      <div class="stat-val" id="stat-best">--</div>
+      <div class="stat-label">Best (ms)</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val" id="stat-avg">--</div>
+      <div class="stat-label">Average</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val" id="stat-tries">0</div>
+      <div class="stat-label">Attempts</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val" id="stat-trolled">0</div>
+      <div class="stat-label">Trolled</div>
+    </div>
+  </div>
+
+  <div id="history"></div>
+
+  <div id="share-panel">
+    <h3>Your Reaction Score</h3>
+    <div id="score-display">--</div>
+    <div id="score-grade"></div>
+    <div id="share-text"></div>
+    <div class="share-btn-row">
+      <button class="btn-small btn-copy" onclick="copyScore()">Copy</button>
+      <button class="btn-small btn-tweet" onclick="tweetScore()">Tweet</button>
+      <button class="btn-small btn-replay" onclick="resetAll()">Play Again</button>
+    </div>
+  </div>
+</div>
+
+<button id="troll-btn" onclick="trollBtnClick()">CLICK ME!</button>
+<div id="toast"></div>
+
+<script>
+// ─── STATE ─────────────────────────────────────────────────────────────────
+const S = {
+  phase: 'idle',       // idle | countdown | go | result | troll-delay | fake-success
+  startTime: 0,
+  results: [],         // valid reaction times
+  tries: 0,
+  trolled: 0,
+  countdownTimer: null,
+  goTimer: null,
+  trollPhase: 0,       // escalates trolling
+  consecutiveGood: 0,
+  fakeSuccessTimer: null,
+  scheduledTrolls: 0,
+};
+
+// ─── TROLL CONFIG ──────────────────────────────────────────────────────────
+const TROLL_MESSAGES = [
+  "Too Late! You blinked 😂",
+  "Almost... but not really.",
+  "lol",
+  "My grandma clicks faster.",
+  "Did you fall asleep?",
+  "That was your brain lagging.",
+  "Touch grass first, then try.",
+  "Have you tried clicking faster?",
+  "Impressive... ly slow.",
+];
+
+const FAKE_SUCCESS_FOLLOWUPS = [
+  "Jk, you were too slow 💀",
+  "Wait nope, that doesn't count.",
+  "Actually... no. Try again.",
+  "Just kidding! lmaoooo",
+  "Haha, gotcha. Not even close.",
+];
+
+const GO_MESSAGES = [
+  "CLICK NOW!",
+  "GO! GO! GO!",
+  "NOW!!!",
+  "CLICK!!!",
+  "DO IT!!",
+];
+
+const WAITING_MSGS = [
+  "Get ready...",
+  "Almost...",
+  "Steady...",
+  "Any second now...",
+  "Don't blink...",
+  "Prepare yourself...",
+  "Loading reaction test...",
+  "Calibrating...",
+];
+
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// ─── TROLL PROBABILITY (scales up) ─────────────────────────────────────────
+function shouldTroll() {
+  const base = 0.45;
+  const escalation = Math.min(S.trollPhase * 0.08, 0.3);
+  return Math.random() < base + escalation;
+}
+function shouldFakeSuccess() {
+  // Only after a few legit rounds to build trust
+  return S.results.length >= 2 && Math.random() < 0.30 && S.consecutiveGood >= 1;
+}
+
+// ─── UI HELPERS ────────────────────────────────────────────────────────────
+const arena      = document.getElementById('arena');
+const arenaMsg   = document.getElementById('arena-msg');
+const arenaSub   = document.getElementById('arena-sub');
+const ringCircle = document.getElementById('ring-circle');
+const trollBtn   = document.getElementById('troll-btn');
+const sharePanel = document.getElementById('share-panel');
+const fpBar      = document.getElementById('fake-progress-bar');
+const fpWrap     = document.getElementById('fake-progress');
+
+function setArena(cls, msg, sub = '') {
+  arena.className = cls;
+  arenaMsg.textContent = msg;
+  arenaSub.textContent = sub;
+}
+
+function showRing(pct) {
+  ringCircle.style.strokeDashoffset = 100 - pct;
+}
+function hideRing() { ringCircle.style.strokeDashoffset = 100; }
+
+function showToast(msg, duration = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+function shakeArena() {
+  arena.classList.remove('shake');
+  void arena.offsetWidth;
+  arena.classList.add('shake');
+  setTimeout(() => arena.classList.remove('shake'), 500);
+}
+
+function spawnParticle(emoji, x, y) {
+  const p = document.createElement('div');
+  p.className = 'particle';
+  p.textContent = emoji;
+  p.style.left = x + 'px';
+  p.style.top  = y + 'px';
+  document.body.appendChild(p);
+  setTimeout(() => p.remove(), 1300);
+}
+
+function ripple(e) {
+  const rect = arena.getBoundingClientRect();
+  const r = document.createElement('div');
+  r.className = 'ripple';
+  r.style.width = r.style.height = '60px';
+  r.style.left = (e.clientX - rect.left - 30) + 'px';
+  r.style.top  = (e.clientY - rect.top  - 30) + 'px';
+  arena.appendChild(r);
+  setTimeout(() => r.remove(), 700);
+}
+
+function updateStats() {
+  const best = S.results.length ? Math.min(...S.results) : null;
+  const avg  = S.results.length ? Math.round(S.results.reduce((a,b)=>a+b,0)/S.results.length) : null;
+  document.getElementById('stat-best').textContent  = best ?? '--';
+  document.getElementById('stat-avg').textContent   = avg  ?? '--';
+  document.getElementById('stat-tries').textContent = S.tries;
+  document.getElementById('stat-trolled').textContent = S.trolled;
+}
+
+function addHistChip(ms, type) {
+  const h = document.getElementById('history');
+  const c = document.createElement('div');
+  c.className = 'hist-chip ' + type;
+  if (type === 'good')  c.textContent = ms + 'ms';
+  else if (type === 'bad') c.textContent = '❌';
+  else c.textContent = '🃏';
+  h.prepend(c);
+  if (h.children.length > 12) h.lastChild.remove();
+}
+
+function clearTimers() {
+  clearTimeout(S.countdownTimer);
+  clearTimeout(S.goTimer);
+  clearTimeout(S.fakeSuccessTimer);
+}
+
+// ─── FAKE PROGRESS BAR ────────────────────────────────────────────────────
+let fpInterval = null;
+function startFakeProgress(duration, onComplete) {
+  fpWrap.style.display = 'block';
+  fpBar.style.width = '0%';
+  let pct = 0;
+  const steps = 40;
+  const step = duration / steps;
+  fpInterval = setInterval(() => {
+    pct += 100 / steps + rand(-0.5, 1.5);
+    pct = Math.min(pct, 99);
+    fpBar.style.width = pct + '%';
+  }, step);
+  setTimeout(() => {
+    clearInterval(fpInterval);
+    fpBar.style.width = '100%';
+    setTimeout(() => {
+      fpWrap.style.display = 'none';
+      fpBar.style.width = '0%';
+      onComplete && onComplete();
+    }, 200);
+  }, duration);
+}
+function stopFakeProgress() {
+  clearInterval(fpInterval);
+  fpWrap.style.display = 'none';
+  fpBar.style.width = '0%';
+}
+
+// ─── TROLL BTN LOGIC ──────────────────────────────────────────────────────
+let trollBtnMoves = 0;
+const trollBtnQuips = [
+  "Missed!",
+  "Haha, nope.",
+  "Try harder!",
+  "Wow, so slow.",
+  "nope",
+  "Nice try!",
+  "LMAO",
+];
+
+function showTrollBtn() {
+  trollBtn.style.display = 'block';
+  trollBtnMoves = 0;
+  moveTrollBtn();
+}
+
+function moveTrollBtn() {
+  const margin = 80;
+  const maxX = window.innerWidth  - trollBtn.offsetWidth  - margin;
+  const maxY = window.innerHeight - trollBtn.offsetHeight - margin;
+  trollBtn.style.left = rand(margin, maxX) + 'px';
+  trollBtn.style.top  = rand(margin, maxY) + 'px';
+}
+
+function trollBtnClick() {
+  trollBtnMoves++;
+  moveTrollBtn();
+  showToast(pick(trollBtnQuips));
+  if (trollBtnMoves >= 5) {
+    trollBtn.style.display = 'none';
+    showToast("😤 Give up already?");
+  }
+}
+
+// ─── HOVERING TROLL BTN (escape on hover) ──────────────────────────────────
+trollBtn.addEventListener('mouseover', () => {
+  if (trollBtnMoves < 5) moveTrollBtn();
+});
+
+// ─── CORE GAME FLOW ───────────────────────────────────────────────────────
+
+function startCountdown() {
+  clearTimers();
+  S.phase = 'countdown';
+  hideRing();
+  stopFakeProgress();
+
+  const delay = rand(1200, 4500);
+  const trollEarly = shouldTroll();
+  const trollTime = rand(300, delay * 0.75);
+
+  let elapsed = 0;
+  const tickRate = 80;
+  let ringPct = 0;
+
+  // Show waiting message + ring animation
+  setArena('waiting', pick(WAITING_MSGS), 'Click when the screen turns green');
+  showRing(0);
+
+  const ringDuration = trollEarly ? trollTime : delay;
+
+  let ringTimer = setInterval(() => {
+    elapsed += tickRate;
+    ringPct = (elapsed / ringDuration) * 100;
+    showRing(Math.min(ringPct, 100));
+    // swap waiting message occasionally
+    if (elapsed % 900 < tickRate) {
+      setArena('waiting', pick(WAITING_MSGS), 'Click when the screen turns green');
+    }
+  }, tickRate);
+
+  if (trollEarly) {
+    // TROLL: interrupt countdown with "Too Late!"
+    S.countdownTimer = setTimeout(() => {
+      clearInterval(ringTimer);
+      hideRing();
+      stopFakeProgress();
+      S.trolled++;
+      S.trollPhase++;
+      S.consecutiveGood = 0;
+      addHistChip(null, 'troll');
+
+      const trollMsg = pick(TROLL_MESSAGES);
+      setArena('fail', trollMsg, 'You weren\'t even close 😬');
+      shakeArena();
+
+      // Show troll btn sometimes
+      if (Math.random() < 0.4 && S.trolled <= 3) {
+        setTimeout(showTrollBtn, 600);
+      }
+
+      updateStats();
+      S.phase = 'troll-delay';
+
+      // Fake progress to restart
+      setTimeout(() => {
+        startFakeProgress(rand(800, 1800), () => {
+          S.phase = 'idle';
+          setArena('', 'Click to Try Again', '');
+        });
+      }, 1000);
+
+    }, trollTime);
+
+  } else {
+    // Legit countdown — go green after delay
+    S.countdownTimer = setTimeout(() => {
+      clearInterval(ringTimer);
+      hideRing();
+
+      if (shouldFakeSuccess()) {
+        showFakeSuccess();
+      } else {
+        goGreen();
+      }
+    }, delay);
+  }
+}
+
+function goGreen() {
+  S.phase = 'go';
+  S.startTime = performance.now();
+  setArena('go', pick(GO_MESSAGES), 'CLICK NOW!');
+
+  // Auto-fail if too slow
+  const timeout = rand(1800, 3000);
+  S.goTimer = setTimeout(() => {
+    if (S.phase !== 'go') return;
+    S.phase = 'idle';
+    S.tries++;
+    S.trolled++;
+    S.trollPhase++;
+    S.consecutiveGood = 0;
+    addHistChip(null, 'bad');
+    setArena('fail', 'TOO SLOW! 💤', 'You took forever...');
+    shakeArena();
+    updateStats();
+    setTimeout(() => {
+      S.phase = 'idle';
+      setArena('', 'Click to Try Again', '');
+    }, 2000);
+  }, timeout);
+}
+
+function showFakeSuccess() {
+  // Show green for a split second, then reveal troll
+  S.phase = 'fake-success';
+  const fakeMs = randInt(150, 400);
+  setArena('fake-success', fakeMs + 'ms', '🎉 Amazing reflexes!');
+
+  S.fakeSuccessTimer = setTimeout(() => {
+    S.trolled++;
+    S.trollPhase++;
+    S.consecutiveGood = 0;
+    S.tries++;
+    addHistChip(null, 'troll');
+    const followup = pick(FAKE_SUCCESS_FOLLOWUPS);
+    setArena('troll', followup, 'That was fake lol 🃏');
+    shakeArena();
+
+    // Spawn laughing particles
+    for (let i = 0; i < 5; i++) {
+      setTimeout(() => spawnParticle(
+        pick(['😂','🤣','💀','😈','🃏']),
+        rand(100, window.innerWidth - 100),
+        rand(100, window.innerHeight - 200)
+      ), i * 120);
+    }
+
+    updateStats();
+    setTimeout(() => {
+      S.phase = 'idle';
+      setArena('', 'Click to Try Again', 'For real this time 😇');
+    }, 2200);
+  }, rand(400, 900));
+}
+
+// ─── ARENA CLICK HANDLER ──────────────────────────────────────────────────
+function handleArenaClick(e) {
+  ripple(e);
+
+  if (S.phase === 'idle') {
+    // Sometimes show a loading fake before actually starting
+    if (Math.random() < 0.25 && S.tries > 0) {
+      setArena('waiting', 'Initializing sensors...', '');
+      startFakeProgress(rand(600, 1400), () => startCountdown());
+    } else {
+      startCountdown();
+    }
+    return;
+  }
+
+  if (S.phase === 'countdown') {
+    // Clicked too early!
+    clearTimers();
+    S.trolled++;
+    S.trollPhase++;
+    S.consecutiveGood = 0;
+    S.tries++;
+    addHistChip(null, 'bad');
+    setArena('fail', 'TOO EARLY! 🤦', 'Wait for green, genius.');
+    shakeArena();
+    updateStats();
+    setTimeout(() => {
+      S.phase = 'idle';
+      setArena('', 'Click to Try Again', 'Wait for the green screen...');
+    }, 1800);
+    return;
+  }
+
+  if (S.phase === 'go') {
+    clearTimeout(S.goTimer);
+    const ms = Math.round(performance.now() - S.startTime);
+    S.phase = 'result';
+    S.tries++;
+    S.consecutiveGood++;
+
+    // Post-success troll: say result is invalid
+    if (Math.random() < 0.2 && S.trollPhase >= 2) {
+      setArena('troll', ms + 'ms', '...but that doesn\'t count 🙃');
+      addHistChip(null, 'troll');
+      S.trolled++;
+      S.trollPhase++;
+      S.consecutiveGood = 0;
+      shakeArena();
+      updateStats();
+      setTimeout(() => {
+        S.phase = 'idle';
+        setArena('', 'Click to Try Again', 'We need a clean measurement.');
+      }, 2000);
+      return;
+    }
+
+    S.results.push(ms);
+    addHistChip(ms, 'good');
+    const grade = gradeReaction(ms);
+    setArena('go', ms + 'ms', grade.label);
+
+    // Spawn particles
+    for (let i = 0; i < 6; i++) {
+      setTimeout(() => spawnParticle(
+        pick(['⚡','✨','🔥','💥','🎯']),
+        e.clientX + rand(-60, 60),
+        e.clientY + rand(-60, 60)
+      ), i * 80);
+    }
+
+    updateStats();
+
+    // Unlock share panel after 5 real results
+    if (S.results.length >= 5) {
+      showSharePanel();
+    }
+
+    setTimeout(() => {
+      S.phase = 'idle';
+      setArena('', 'Click to Play Again', '');
+    }, 1800);
+    return;
+  }
+
+  // Any other phase: ignore or prompt
+  if (S.phase === 'troll-delay' || S.phase === 'fake-success') {
+    showToast("Easy there! Wait for the test to reset.");
+  }
+}
+
+// ─── GRADE ────────────────────────────────────────────────────────────────
+function gradeReaction(ms) {
+  if (ms < 150) return { label: '⚡ Superhuman! Are you hacking?', rank: 'S+' };
+  if (ms < 200) return { label: '🔥 Insane reflexes!',            rank: 'S'  };
+  if (ms < 250) return { label: '🎯 Elite speed!',                rank: 'A+' };
+  if (ms < 300) return { label: '✨ Very fast!',                   rank: 'A'  };
+  if (ms < 350) return { label: '👍 Above average.',              rank: 'B'  };
+  if (ms < 400) return { label: '😐 Average human.',              rank: 'C'  };
+  if (ms < 500) return { label: '🐢 A bit slow...',               rank: 'D'  };
+  return                { label: '💤 Are you sleeping?',           rank: 'F'  };
+}
+
+function gradeAvg(avg) {
+  const g = gradeReaction(avg);
+  return g.rank;
+}
+
+// ─── SHARE PANEL ─────────────────────────────────────────────────────────
+function showSharePanel() {
+  const avg  = Math.round(S.results.reduce((a,b)=>a+b,0)/S.results.length);
+  const best = Math.min(...S.results);
+  const rank = gradeAvg(avg);
+  const score = Math.max(0, Math.round(1000 - avg * 1.5 + S.results.length * 5));
+
+  document.getElementById('score-display').textContent = score;
+  document.getElementById('score-grade').innerHTML =
+    `<span style="color:var(--muted);font-size:0.9rem">Rank: <b style="color:var(--accent2)">${rank}</b> &nbsp;|&nbsp; Best: <b style="color:var(--green)">${best}ms</b> &nbsp;|&nbsp; Avg: <b>${avg}ms</b></span>`;
+
+  const shareStr = buildShareText(score, rank, best, avg);
+  document.getElementById('share-text').textContent = shareStr;
+
+  sharePanel.classList.add('visible');
+}
+
+function buildShareText(score, rank, best, avg) {
+  const bar = buildBar(score);
+  return `⚡ Reaction Speed Test\n${bar}\nScore: ${score} | Rank: ${rank}\nBest: ${best}ms | Avg: ${avg}ms\nAttempts: ${S.tries} | Trolled: ${S.trolled}x\nPlay: ${location.href}`;
+}
+
+function buildBar(score) {
+  const filled = Math.round((score / 1000) * 10);
+  const empty  = 10 - filled;
+  return '🟩'.repeat(filled) + '⬛'.repeat(empty);
+}
+
+function copyScore() {
+  const text = document.getElementById('share-text').textContent;
+  navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard!'));
+}
+
+function tweetScore() {
+  const avg  = Math.round(S.results.reduce((a,b)=>a+b,0)/S.results.length);
+  const best = Math.min(...S.results);
+  const rank = gradeAvg(avg);
+  const score = Math.max(0, Math.round(1000 - avg * 1.5 + S.results.length * 5));
+  const text = encodeURIComponent(
+    `⚡ I scored ${score} on the Reaction Speed Test! Rank: ${rank} | Best: ${best}ms\n(got trolled ${S.trolled} times lmao)\n${location.href}`
+  );
+  window.open('https://twitter.com/intent/tweet?text=' + text, '_blank');
+}
+
+function resetAll() {
+  clearTimers();
+  stopFakeProgress();
+  S.phase = 'idle';
+  S.results = [];
+  S.tries = 0;
+  S.trolled = 0;
+  S.trollPhase = 0;
+  S.consecutiveGood = 0;
+  document.getElementById('history').innerHTML = '';
+  sharePanel.classList.remove('visible');
+  trollBtn.style.display = 'none';
+  setArena('', 'Click to Start', 'Test your human reflexes');
+  updateStats();
+}
+
+// ─── RANDOM AMBIENT TROLL: wiggle the arena label occasionally ────────────
+setInterval(() => {
+  if (S.phase === 'idle' && S.tries > 0 && Math.random() < 0.15) {
+    const msgs = [
+      'Click to Try Again',
+      'Are you scared? 👀',
+      'Still here?',
+      'Tap to play...',
+      'Waiting for you...',
+      '...zzzZZZ',
+    ];
+    arenaSub.textContent = pick(msgs);
+  }
+}, 3000);
+
+// ─── KEYBOARD SUPPORT ────────────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'Enter') {
+    e.preventDefault();
+    handleArenaClick({ clientX: arena.getBoundingClientRect().left + arena.offsetWidth/2,
+                       clientY: arena.getBoundingClientRect().top  + arena.offsetHeight/2 });
+  }
+});
+
+// ─── INIT ─────────────────────────────────────────────────────────────────
+updateStats();
+</script>
+</body>
+</html>
