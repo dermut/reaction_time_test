@@ -384,6 +384,7 @@ const S = {
   goTimer: null,
   trollPhase: 0,       // escalates trolling
   consecutiveGood: 0,
+  consecutiveTroll: 0, // track back-to-back trolls to guarantee real rounds
   fakeSuccessTimer: null,
   scheduledTrolls: 0,
 };
@@ -432,15 +433,17 @@ function rand(min, max) { return Math.random() * (max - min) + min; }
 function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-// ─── TROLL PROBABILITY (scales up) ─────────────────────────────────────────
+// ─── TROLL PROBABILITY (scales up, but guarantees real rounds) ──────────────
 function shouldTroll() {
-  const base = 0.45;
-  const escalation = Math.min(S.trollPhase * 0.08, 0.3);
+  // After 2 consecutive trolls, always give a real round
+  if (S.consecutiveTroll >= 2) return false;
+  const base = 0.40;
+  const escalation = Math.min(S.trollPhase * 0.05, 0.15); // max 0.55 total
   return Math.random() < base + escalation;
 }
 function shouldFakeSuccess() {
-  // Only after a few legit rounds to build trust
-  return S.results.length >= 2 && Math.random() < 0.30 && S.consecutiveGood >= 1;
+  // Need at least 1 real result; don't fake if already trolled twice in a row
+  return S.results.length >= 1 && S.consecutiveTroll < 2 && Math.random() < 0.25;
 }
 
 // ─── UI HELPERS ────────────────────────────────────────────────────────────
@@ -636,6 +639,7 @@ function startCountdown() {
       S.trolled++;
       S.trollPhase++;
       S.consecutiveGood = 0;
+      S.consecutiveTroll++;
       addHistChip(null, 'troll');
 
       const trollMsg = pick(TROLL_MESSAGES);
@@ -689,6 +693,7 @@ function goGreen() {
     S.trolled++;
     S.trollPhase++;
     S.consecutiveGood = 0;
+    S.consecutiveTroll++;
     addHistChip(null, 'bad');
     setArena('fail', 'TOO SLOW! 💤', 'You took forever...');
     shakeArena();
@@ -710,6 +715,7 @@ function showFakeSuccess() {
     S.trolled++;
     S.trollPhase++;
     S.consecutiveGood = 0;
+    S.consecutiveTroll++;
     S.tries++;
     addHistChip(null, 'troll');
     const followup = pick(FAKE_SUCCESS_FOLLOWUPS);
@@ -754,6 +760,7 @@ function handleArenaClick(e) {
     S.trolled++;
     S.trollPhase++;
     S.consecutiveGood = 0;
+    S.consecutiveTroll++;
     S.tries++;
     addHistChip(null, 'bad');
     setArena('fail', 'TOO EARLY! 🤦', 'Wait for green, genius.');
@@ -772,14 +779,16 @@ function handleArenaClick(e) {
     S.phase = 'result';
     S.tries++;
     S.consecutiveGood++;
+    S.consecutiveTroll = 0; // real attempt — reset troll streak
 
-    // Post-success troll: say result is invalid
-    if (Math.random() < 0.2 && S.trollPhase >= 2) {
+    // Post-success troll: say result is invalid (only if not already trolled twice in a row)
+    if (Math.random() < 0.2 && S.trollPhase >= 2 && S.consecutiveTroll < 2) {
       setArena('troll', ms + 'ms', '...but that doesn\'t count 🙃');
       addHistChip(null, 'troll');
       S.trolled++;
       S.trollPhase++;
       S.consecutiveGood = 0;
+      S.consecutiveTroll++;
       shakeArena();
       updateStats();
       setTimeout(() => {
@@ -893,6 +902,7 @@ function resetAll() {
   S.trolled = 0;
   S.trollPhase = 0;
   S.consecutiveGood = 0;
+  S.consecutiveTroll = 0;
   document.getElementById('history').innerHTML = '';
   sharePanel.classList.remove('visible');
   trollBtn.style.display = 'none';
